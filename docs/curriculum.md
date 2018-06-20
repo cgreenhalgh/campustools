@@ -1,6 +1,6 @@
 # Curriculum data
 
-## module catalogue
+## module catalogue - working notes
 
 ### browser
 

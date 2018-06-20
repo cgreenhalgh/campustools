@@ -4,6 +4,8 @@ import * as jsdom from 'jsdom'
 import NODE_TYPE from 'jsdom'
 const { JSDOM } = jsdom
 import * as xml2js from 'xml2js'
+import * as fs from 'fs'
+import { JobQueue } from './jobqueue'
 
 console.log('getcourses...')
 
@@ -62,7 +64,36 @@ let year:YEAR_CODE = YEAR_CODE.YEAR_2018
 let ou:OU_CODE = OU_CODE.CS_UK
 let courses:CourseSummary[] = []
 
+console.log(`usage: ${process.argv[0]} ${process.argv[1]} CAMPUS YEAR`)
+console.log(`campuses: ${CAMPUS_CODE.UK} ${CAMPUS_CODE.MALAYSIA} ${CAMPUS_CODE.CHINA}`)
+console.log(`years: 2017 2018`)
+if (process.argv.length>=3) {
+  campus = process.argv[2] as CAMPUS_CODE
+  switch(campus) {
+  case CAMPUS_CODE.MALAYSIA:
+    ou = OU_CODE.CS_MALAYSIA
+    break
+  case CAMPUS_CODE.CHINA:
+    ou = OU_CODE.CS_CHINA
+    break
+  default:
+    ou = OU_CODE.CS_UK
+    break
+  }
+}
+if (process.argv.length>=4) {
+  let y = process.argv[3]
+  if ('2017'==y)
+    year = YEAR_CODE.YEAR_2017
+  else if ('2018'==y)
+    year = YEAR_CODE.YEAR_2018
+  else {
+    console.log(`unknown year: ${y}`)
+    process.exit(-1)
+  }
+}
 
+console.log(`get courses (modules) for ${campus} ${year} ${ou}`)
 
 function getHiddenFields(body:string) {
   let dom = new JSDOM(body)
@@ -203,7 +234,8 @@ function extractModulePageContent(html:string) : any {
   
   let courseInfo = {}
   let name:string = null
-  let extraValue:PageValue = null
+  let nextValue:PageValue = null
+  let nextValueName:string = null
   
   if (values.length<4)
     throw new Error('module details did not find enough values - '+html)
@@ -214,43 +246,176 @@ function extractModulePageContent(html:string) : any {
   courseInfo['title'] = values[2]
   courseInfo['term'] = values[3]
   
+  let debug = false
+  let lastWasName:boolean = false
   for (let vi=4; vi<values.length; vi++) {
     let value = values[vi]
-    if (value.text && value.text.lastIndexOf(':')==value.text.length-1) {
+    let isName = (value.text && value.text.lastIndexOf(':')==value.text.length-1)
+    if (debug) console.log(`value ${JSON.stringify(value)} ${isName ? 'isname' : ''} ${lastWasName ? 'lastWasName' : ''} nextValue ${JSON.stringify(nextValue)}`)
+    if (nextValue!==null && (isName && lastWasName)) {
+      if (courseInfo[name]===undefined) {
+        if (debug) console.log(`set ${name} = ${JSON.stringify(nextValue)}`)
+        courseInfo[name] = { table:nextValue.table,  text: nextValue.text }
+      } else if (name!==null && courseInfo[name]!==undefined && courseInfo[name].table!==undefined && nextValue.table===undefined && courseInfo[name].text===undefined && nextValue.text!==undefined) {
+        courseInfo[name].text = nextValue.text
+        console.log(`note: merge after 2nd name, value ${nextValue.text} into ${name}`)
+      } else  {
+        console.log(`ignore unnamed value after 2nd name ${JSON.stringify(nextValue)}`)
+      }
+      nextValue = null
+        
+    } else if (nextValue!==null && !isName) {
+      if (courseInfo[nextValueName]===undefined) {
+        if (debug) console.log(`set ${nextValueName} = ${JSON.stringify(nextValue)}`)
+        courseInfo[nextValueName] = { table:nextValue.table,  text: nextValue.text }
+      } else if (nextValueName!==null && courseInfo[nextValueName]!==undefined && courseInfo[nextValueName].table!==undefined && nextValue.table===undefined && courseInfo[nextValueName].text===undefined && nextValue.text!==undefined) {
+        courseInfo[nextValueName].text = nextValue.text
+        console.log(`note: merge after 2nd value, value ${nextValue.text} into ${nextValueName}`)
+      } else  {
+        console.log(`ignore unnamed value after 2nd value ${JSON.stringify(nextValue)}`)
+      }
+      nextValue = null
+    }
+    lastWasName = isName
+    if (isName) {
       name = value.text
-      if (extraValue) {
-        courseInfo[name] = { text:extraValue.text, table:extraValue.table }
-        extraValue = null
+      if (nextValue && nextValue.table) {
+        if (debug) console.log(`set ${name} = ${JSON.stringify(nextValue)}`)
+        courseInfo[name] = {table:nextValue.table,  text: nextValue.text } 
+        nextValue = null
       }
     } else {
-      if (extraValue) {
-        console.log(`ignore unnamed value ${JSON.stringify(extraValue)}`)
-        extraValue = null
-      }
-      if (!name) {
-        extraValue = value
-      }
+      if (name && courseInfo[name]===undefined) {
+        courseInfo[name] = { table: value.table, text: value.text }
+        if (debug) console.log(`set ${name} = ${JSON.stringify(value)}`)
+      } else if (name!==null && 'Course Web Links:'!=name && courseInfo[name]!==undefined && courseInfo[name].table!==undefined && value.table===undefined && courseInfo[name].text===undefined && value.text!==undefined) {
+        // note special case for 'Course Web Links:' with table => no text (followed by education aims out of order)
+        courseInfo[name].text = value.text
+        console.log(`note: merge value ${value.text} into ${name}`)
+      } 
       else {
-        // merge?
-        let oldValue = courseInfo[name]
-        if (!oldValue) {
-          courseInfo[name] = { text:value.text, table:value.table }
-        } else if (oldValue.table && !value.table && !oldValue.text && value.text) {
-          courseInfo[name].text = value.text
-          console.log(`note: merge value ${value.text} into ${name}`)
-          name = null
-        } else {
-          extraValue = value
-          name = null
-        }
+        nextValue = value
+        nextValueName = name
       }
     }
   }
-  if(extraValue)
-    console.log(`note: ignore last value ${JSON.stringify(extraValue)}`)
+  if(nextValue)
+    console.log(`note: ignore last value ${JSON.stringify(nextValue)}`)
   
   return courseInfo
 }
+
+function getCourseList(): Promise<any> {
+  // module ("course") search 
+  let COURSE_SEARCH_EXTRA_FIELDS = {
+    // /*??*/ ICBcDomData: '',
+    //C~UN_PROG_MOD_EXTRCT_GBL~EMPLOYEE~HRMS~UN_PROG_AND_MOD_EXTRACT.UN_PAM_CRSE_EXTRCT.GBL~UnknownValue~Course Extract~UnknownValue~UnknownValue~https://mynottingham.nottingham.ac.uk/psp/psprd/EMPLOYEE/HRMS/c/UN_PROG_AND_MOD_EXTRACT.UN_PAM_CRSE_EXTRCT.GBL~UnknownValue',
+    ICAction: 'UN_PAM_EXTR_WRK_UN_SEARCH_PB$0',
+    UN_PAM_EXTR_WRK_UN_PAM_CRSE1_SRCH$1: '',
+    UN_PAM_EXTR_WRK_UN_PAM_CRSE2_SRCH$2: '',
+    UN_PAM_EXTR_WRK_UN_PAM_CRSE2_SRCH$3: '',
+    UN_PAM_EXTR_WRK_UN_PAM_CRSE2_SRCH$4: '',
+  }
+  // ICElementNum, ICStateNum - varies!
+  
+  let fields = Object.assign({}, hiddenFields, COURSE_FORM_FIELDS, COURSE_SEARCH_EXTRA_FIELDS, {
+    UN_PAM_EXTR_WRK_CAMPUS: campus,
+    UN_PAM_EXTR_WRK_STRM: year,
+    UN_PAM_EXTR_WRK_UN_PAM_CRSE1_SRCH$0: ou,
+  })
+  //console.log('form fields to post', fields)
+  return reqp.post({
+    url:CATALOGUE_URL, 
+    jar:jar,
+    headers: HEADERS,
+    form:fields,
+  })
+  .then((body) => {
+    // with the AJAX flag this is now XML...
+    return parseAsync(body)
+  })
+  .then((xml) => {
+    getHiddenFieldsFromXml(xml)
+    return xml
+  })
+}
+
+function getCourseDetails(formid:string) : Promise<void> {
+  // module ("course") search 
+  let COURSE_DETAIL_EXTRA_FIELDS = {
+    UN_PAM_EXTR_WRK_DESCR5_1: '',
+  }
+  // ICElementNum, ICStateNum - varies!
+  
+  let fields = Object.assign({}, hiddenFields, COURSE_FORM_FIELDS, COURSE_DETAIL_EXTRA_FIELDS, {
+    ICAction: formid,
+  })
+  //console.log('form fields to post', fields)
+  return reqp.post({
+      url:CATALOGUE_URL, 
+      jar:jar,
+      headers: HEADERS,
+      form:fields,
+  })
+  .then((body) => {
+    // with the AJAX flag this is now XML...
+    return parseAsync(body)
+  })
+  .then((xml) => {
+    getHiddenFieldsFromXml(xml, 'course detail')
+    
+    let field = xml['PAGE']['FIELD'].find((f) => f['$'] && 'win0divPAGECONTAINER'==f['$']['id'])
+    if (!field)
+      throw new Error('course detail xml did not find PAGE.FIELD[win0divPAGECONTAINER]: '+JSON.stringify(xml));
+  
+    let html = field['_']
+    let dom = new JSDOM(html)
+  
+    let codeNode = dom.window.document.querySelector('span[id="UN_PAM_CRSE_DTL_SUBJECT_DESCR$0"]')
+    if (!codeNode)
+      throw new Error('could not find course code in detail page: '+html)
+    let code = getTextContent(codeNode)
+    let titleNode = dom.window.document.querySelector('span[id="UN_PAM_CRSE_DTL_COURSE_TITLE_LONG$0"]')
+    if (!titleNode)
+      throw new Error('could not find course title in detail page: '+html)
+    let title = getTextContent(titleNode)
+    //console.log(`got detail page for course ${code}: ${title}`)
+  
+    let coursehtmlfile = 'data/'+code+'.html'
+    console.log(`write ${coursehtmlfile}`)
+    fs.writeFileSync(coursehtmlfile, html, 'utf-8')
+      
+    let course = extractModulePageContent(html)  
+    //console.log('read course detail: ',JSON.stringify(course, null, '    '))
+    
+    let coursejsonfile = 'data/'+code+'.json'
+    let json = JSON.stringify(course, null, '  ')
+    console.log(`write ${coursejsonfile}`)
+    fs.writeFileSync(coursejsonfile, json, 'utf-8')
+  })
+}
+
+function backFromCourseDetails() : Promise<void> {
+  let fields = Object.assign({}, hiddenFields, COURSE_FORM_FIELDS, {
+    ICAction: 'UN_PAM_EXTR_WRK_UN_MODULE_PB',
+  })
+  //console.log('form fields to post', fields)
+  return reqp.post({
+      url:CATALOGUE_URL, 
+      jar:jar,
+      headers: HEADERS,
+      form:fields,
+  })
+  .then((body) => {
+    // with the AJAX flag this is now XML...
+    return parseAsync(body)
+  })
+  .then((xml) => {
+    getHiddenFieldsFromXml(xml, 'course detail back')
+  })
+}
+
+let jobs = new JobQueue()
 
 // get Portal view
 reqp.get({
@@ -274,7 +439,6 @@ reqp.get({
   }
   if (src.indexOf(CATALOGUE_URL)!=0) {
     throw new Error('iframe src not as expected: '+src.value)
-    return
   }
   console.log('portal request OK - got cookies')
 })
@@ -318,38 +482,10 @@ reqp.get({
 .then((xml) => {
   getHiddenFieldsFromXml(xml)
   
-  // module ("course") search 
-  let COURSE_SEARCH_EXTRA_FIELDS = {
-    // /*??*/ ICBcDomData: '',
-    //C~UN_PROG_MOD_EXTRCT_GBL~EMPLOYEE~HRMS~UN_PROG_AND_MOD_EXTRACT.UN_PAM_CRSE_EXTRCT.GBL~UnknownValue~Course Extract~UnknownValue~UnknownValue~https://mynottingham.nottingham.ac.uk/psp/psprd/EMPLOYEE/HRMS/c/UN_PROG_AND_MOD_EXTRACT.UN_PAM_CRSE_EXTRCT.GBL~UnknownValue',
-    ICAction: 'UN_PAM_EXTR_WRK_UN_SEARCH_PB$0',
-    UN_PAM_EXTR_WRK_UN_PAM_CRSE1_SRCH$1: '',
-    UN_PAM_EXTR_WRK_UN_PAM_CRSE2_SRCH$2: '',
-    UN_PAM_EXTR_WRK_UN_PAM_CRSE2_SRCH$3: '',
-    UN_PAM_EXTR_WRK_UN_PAM_CRSE2_SRCH$4: '',
-  }
-  // ICElementNum, ICStateNum - varies!
-  
-  let fields = Object.assign({}, hiddenFields, COURSE_FORM_FIELDS, COURSE_SEARCH_EXTRA_FIELDS, {
-    UN_PAM_EXTR_WRK_CAMPUS: campus,
-    UN_PAM_EXTR_WRK_STRM: year,
-    UN_PAM_EXTR_WRK_UN_PAM_CRSE1_SRCH$0: ou,
-  })
-  //console.log('form fields to post', fields)
-  return reqp.post({
-    url:CATALOGUE_URL, 
-    jar:jar,
-    headers: HEADERS,
-    form:fields,
-  })
-})
-.then((body) => {
-  // with the AJAX flag this is now XML...
-  return parseAsync(body)
+  return getCourseList()
 })
 .then((xml) => {
-  getHiddenFieldsFromXml(xml)
-  
+    
   let field = xml['PAGE']['FIELD'].find((f) => f['$'] && 'win0divPAGECONTAINER'==f['$']['id'])
   if (!field)
     throw new Error('course list body xml did not find PAGE.FIELD[win0divPAGECONTAINER]: '+JSON.stringify(xml));
@@ -388,58 +524,27 @@ reqp.get({
     
     courses.push(course);
     console.log(`- module ${course.code}: ${course.title} - ${course.level}, ${course.semester} as ${formid}`)
+      
+    jobs.addJob((queue) =>
+      getCourseDetails(formid)
+      .then(() => backFromCourseDetails())
+      .then(() => getCourseList())
+    )
   }
   
   // first module
   if (courses.length==0)
     throw new Error('did not find any courses')
-  
-  let course = courses[0]
-  // module ("course") search 
-  let COURSE_DETAIL_EXTRA_FIELDS = {
-    UN_PAM_EXTR_WRK_DESCR5_1: '',
-  }
-  // ICElementNum, ICStateNum - varies!
-  
-  let fields = Object.assign({}, hiddenFields, COURSE_FORM_FIELDS, COURSE_DETAIL_EXTRA_FIELDS, {
-    ICAction: formids[course.code],
-  })
-  //console.log('form fields to post', fields)
-  return reqp.post({
-    url:CATALOGUE_URL, 
-    jar:jar,
-    headers: HEADERS,
-    form:fields,
-  })
-})
-.then((body) => {
-  // with the AJAX flag this is now XML...
-  return parseAsync(body)
-})
-.then((xml) => {
-  getHiddenFieldsFromXml(xml, 'course detail')
-  
-  let field = xml['PAGE']['FIELD'].find((f) => f['$'] && 'win0divPAGECONTAINER'==f['$']['id'])
-  if (!field)
-    throw new Error('course detail xml did not find PAGE.FIELD[win0divPAGECONTAINER]: '+JSON.stringify(xml));
-  
-  let html = field['_']
-  let dom = new JSDOM(html)
-  
-  let codeNode = dom.window.document.querySelector('span[id="UN_PAM_CRSE_DTL_SUBJECT_DESCR$0"]')
-  if (!codeNode)
-    throw new Error('could not find course code in detail page: '+html)
-  let code = getTextContent(codeNode)
-  let titleNode = dom.window.document.querySelector('span[id="UN_PAM_CRSE_DTL_COURSE_TITLE_LONG$0"]')
-  if (!titleNode)
-    throw new Error('could not find course title in detail page: '+html)
-  let title = getTextContent(titleNode)
-  console.log(`got detail page for course ${code}: ${title}`)
-  
-  let course = extractModulePageContent(html)  
-  console.log('read course detail: ',JSON.stringify(course, null, '    '))
+
+  let json = JSON.stringify(courses, null, '  ')
+  let courselistfile = 'data/'+campus+'-'+year+'-'+ou+'.json'
+  console.log(`write all courses for ${campus} ${year} ${ou} to ${courselistfile}`)
+  fs.writeFileSync(courselistfile, json, 'utf-8')
+    
+  return jobs.runAll()
 })
 .then(() => {
+  console.log('done all!')
 })
 .catch((err) => {
   console.log('error', err)
