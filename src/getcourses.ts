@@ -6,6 +6,7 @@ const { JSDOM } = jsdom
 import * as xml2js from 'xml2js'
 import * as fs from 'fs'
 import { JobQueue } from './jobqueue'
+import { CourseSummary, CAMPUS_CODE, YEAR_CODE, OU_CODE } from './types'
 
 console.log('getcourses...')
 
@@ -19,32 +20,6 @@ const PORTAL_URL = 'http://modulecatalogue.nottingham.ac.uk/Nottingham/'
 const CATALOGUE_URL = 'https://campus.nottingham.ac.uk/psc/csprd/EMPLOYEE/HRMS/c/UN_PROG_AND_MOD_EXTRACT.UN_PAM_CRSE_EXTRCT.GBL'
 const BASE_URL = 'https://nottingham.ac.uk'
 const HEADERS = { 'User-Agent': 'campustools', 'Accept': '*/*' }
-enum CAMPUS_CODE {
-  UK = 'U',
-  MALAYSIA = 'M',
-  CHINA = 'C',
-}
-
-enum YEAR_CODE {
-  YEAR_2017 = '3170',
-  YEAR_2018 = '3180',
-}
-
-enum OU_CODE {
-  CS_UK = 'USC-CS',
-  CS_MALAYSIA = 'MSC-CS',
-  CS_CHINA = 'CSC-CS',
-}
-
-interface CourseSummary {
-  code:string,
-  title:string,
-  semester:string,
-  level:string,
-  campus:CAMPUS_CODE,
-  year:YEAR_CODE,
-  ou:OU_CODE,
-}
 
 let COURSE_FORM_FIELDS = {
   ICAJAX: '1',

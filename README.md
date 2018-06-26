@@ -14,6 +14,8 @@ docker build -t campustools .
 
 ## Usage
 
+### Download course (module) files
+
 ```
 docker run -it --rm --name campustools \
   -v `pwd`/data:/root/work/data -p 8080:8080 \
@@ -38,6 +40,16 @@ Organisation codes:
 - CS_MALAYSIA = 'MSC-CS',
 - CS_CHINA = 'CSC-CS',
 
+### Make course (module) file index
+
+```
+docker run -it --rm --name campustools \
+  -v `pwd`/data:/root/work/data -p 8080:8080 \
+  campustools node dist/renamecoursefiles.js \
+  data data/uk/U-3180-USC-CS.json data/china/C-3180-CSC-CS.json data/malaysia/M-3180-MSC-CS.json 
+```
+
+Copies module files to `LEVEL - TITLE (CAMPUS) CODE.html` and generates `index.html`.
 
 ## File format
 
