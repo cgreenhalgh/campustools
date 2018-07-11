@@ -44,15 +44,19 @@ for (var arg=3; arg<process.argv.length; arg++) {
     
     let indir = path.dirname(coursesfilename)
     for (let course of courses) {
+        
+      let coursefile = path.join(indir, course.code+'.html')
+      let outfilename = path.join(outdir, getCourseFilename(course))
+      if (!fs.existsSync(coursefile)) {
+        console.log(`skip missing ${coursefile} -> ${outfilename}`)
+        continue
+      }
       let entry:IndexEntry = index.find((i) => i.title == course.title && i.level == course.level)
       if (!entry) {
           entry = { title:course.title, level:course.level, courses:{} }
           index.push(entry)
       }
       entry.courses[course.campus] = course
-        
-      let coursefile = path.join(indir, course.code+'.html')
-      let outfilename = path.join(outdir, getCourseFilename(course))
       console.log(`${coursefile} -> ${outfilename}`)
       try {
         fs.copyFileSync(coursefile, outfilename)
@@ -65,7 +69,7 @@ for (var arg=3; arg<process.argv.length; arg++) {
 let indexfile = path.join(outdir, 'index.html')
 let html = '<html><head><title>Index</title></head><body><table><tbody><tr><th>Level</th><th>Title</th>'
 for (let campus in CAMPUS_NAME) {
-    console.log('campus: '+campus)
+    //console.log('campus: '+campus)
     html = html + '<th>'+CAMPUS_NAME[campus]+'</th>'
 }
 html = html + '</tr>\n'

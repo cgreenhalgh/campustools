@@ -61,6 +61,11 @@ Summary:
 - `semester`:string
 - `level`:string
 
+## Other utilities
+
+Make simple HTML index of directory (recursive, to a nested index file):
+`node dist/makeindex.html DIRECTORY` 
+
 ## Development
 
 ```
