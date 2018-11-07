@@ -66,12 +66,34 @@ Summary:
 Make simple HTML index of directory (recursive, to a nested index file):
 `node dist/makeindex.html DIRECTORY` 
 
+## BCS outcome management
+
+Generate CSV file mapping table and HTML file mapping/comment document from module-learning-outcomes.xls formatted spreadsheet:
+```
+node dist/bcsoutput.js data/bcs/module-learning-outcomes.xls
+```
+
+Spreadsheet has three sheets:
+- `mapping and outcomes` - the main sheet: actual mapping entries
+- `modules` - list of all relevant modules and codes
+- `criteria` - list of all BCS criteria
+
+The mapping and outcomes sheets has columns:
+- `UK New code`, `China New code`, `Malaysia New code`, `UK Old code`, `China Old code`, `Malaysia Old code`
+- `Module Name`, `Credits`, `Level` (1-4)
+- `Criterion code`, e.g. "2.1.1"
+- `Outcome type`, one of "1. Intellectual skills ", "2. Professional / practical skills" or "3. Transferable / key skills" (as per quality manual guiadance)
+- `Criterion text`
+- `Contribution level`, currently one of "some", "some (taught)" or "major"
+- `Specific text`
+- `Formatted output` - formula for output text collation
+
 ## Development
 
 ```
 docker run -it --rm --name campustools \
   -v `pwd`/data:/root/work/data -p 8080:8080 \
-  campustools /bin/bash
+  campustools
 ```
 ```
 tsc

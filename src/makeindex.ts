@@ -95,6 +95,9 @@ let index = `<html><head><meta charset="UTF-8"><title>${dir}</title>`+
 
 function writeIndex(dir:string, f:File, level:number): string {
   if (f.isFile) {
+    // exclude index
+    if (f.basename == 'index')
+      return ''
     let res = `<tr><td><a href="${dir}/${f.instances[0].name}">${f.basename}</a></td><td>`
     for (let i of f.instances) {
       res = res + `<a href="${dir}/${i.name}">${i.extension}</a> (${i.size}) `
