@@ -417,16 +417,20 @@ reqp.get({
   // find iframe ref in portal
   let iframe = dom.window.document.querySelector("iframe")
   if (!iframe) {
-    throw new Error('did not get iframe back in result: '+body)
+    console.log('Warning: did not get iframe back in result: '+body)
+  } else {
+    let src = iframe.getAttribute('src')
+    if (!src) {
+      console.log('Warning: iframe missing src; attributes '+iframe.attributes)
+    } else {
+      if (src.indexOf(CATALOGUE_URL)!=0) {
+        console.log('Warning: iframe src not as expected: '+src.value)
+      }
+      else {
+        console.log('portal request OK - got cookies')
+      }
+    }
   }
-  let src = iframe.getAttribute('src')
-  if (!src) {
-    throw new Error('iframe missing src; attributes '+iframe.attributes)
-  }
-  if (src.indexOf(CATALOGUE_URL)!=0) {
-    throw new Error('iframe src not as expected: '+src.value)
-  }
-  console.log('portal request OK - got cookies')
 })
 .then(() => {
   console.log('then...') 
