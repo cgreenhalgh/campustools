@@ -34,6 +34,7 @@ Campus codes:
 Year codes:
 - YEAR_2017 = '3170',
 - YEAR_2018 = '3180',
+- YEAR_2022 = '3220' ?!
 
 Organisation codes:
 - CS_UK = 'USC-CS',
@@ -92,6 +93,7 @@ The mapping and outcomes sheets has columns:
 
 ```
 docker run -it --rm --name campustools \
+  -v `pwd`/src:/root/work/src \
   -v `pwd`/data:/root/work/data -p 8080:8080 \
   campustools
 ```

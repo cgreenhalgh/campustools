@@ -17,6 +17,7 @@ export enum CAMPUS_CODE {
 export enum YEAR_CODE {
   YEAR_2017 = '3170',
   YEAR_2018 = '3180',
+  YEAR_2022 = '3220',
 }
 
 export enum OU_CODE {

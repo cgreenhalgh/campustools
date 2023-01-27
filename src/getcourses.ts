@@ -20,6 +20,8 @@ const PORTAL_URL = 'http://modulecatalogue.nottingham.ac.uk/Nottingham/'
 const CATALOGUE_URL = 'https://campus.nottingham.ac.uk/psc/csprd/EMPLOYEE/HRMS/c/UN_PROG_AND_MOD_EXTRACT.UN_PAM_CRSE_EXTRCT.GBL'
 const BASE_URL = 'https://nottingham.ac.uk'
 const HEADERS = { 'User-Agent': 'campustools', 'Accept': '*/*' }
+const COOKIE_BASE_URL = 'https://campus.nottingham.ac.uk/'
+//const USER_AGENT = ''
 
 let COURSE_FORM_FIELDS = {
   ICAJAX: '1',
@@ -39,9 +41,9 @@ let year:YEAR_CODE = YEAR_CODE.YEAR_2018
 let ou:OU_CODE = OU_CODE.CS_UK
 let courses:CourseSummary[] = []
 
-console.log(`usage: ${process.argv[0]} ${process.argv[1]} CAMPUS YEAR`)
+console.log(`usage: ${process.argv[0]} ${process.argv[1]} CAMPUS YEAR [cookies CSPRD-PORTAL-PSJSESSIONID ... PS_TOKEN]`)
 console.log(`campuses: ${CAMPUS_CODE.UK} ${CAMPUS_CODE.MALAYSIA} ${CAMPUS_CODE.CHINA}`)
-console.log(`years: 2017 2018`)
+console.log(`years: 2017 2018 2022`)
 if (process.argv.length>=3) {
   campus = process.argv[2] as CAMPUS_CODE
   switch(campus) {
@@ -62,10 +64,19 @@ if (process.argv.length>=4) {
     year = YEAR_CODE.YEAR_2017
   else if ('2018'==y)
     year = YEAR_CODE.YEAR_2018
+  else if ('2022'==y)
+    year = YEAR_CODE.YEAR_2022
   else {
     console.log(`unknown year: ${y}`)
     process.exit(-1)
   }
+}
+if (process.argv.length>=5) {
+  let extraCookies = process.argv[4]
+  extraCookies.split(';').map(function (val) { 
+    jar.setCookie( reqp.cookie(val.trim() ), COOKIE_BASE_URL )
+    console.log(`added cookie ${val}`)			
+  });
 }
 
 console.log(`get courses (modules) for ${campus} ${year} ${ou}`)
