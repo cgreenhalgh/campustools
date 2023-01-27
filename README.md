@@ -14,12 +14,20 @@ docker build -t campustools .
 
 ## Usage
 
+Note, when I first wrote this you could access the module specs 
+without authenticating with campus; now you need to.
+I haven't implemented that here, but if you open the developer
+tools in a browser and log into campus, then find and copy the 
+Cookie: sent to the server and use that value as an extra
+argument it might work :-) 
+
 ### Download course (module) files
 
+(note sure this is working at the moment... try the dev route, below)
 ```
 docker run -it --rm --name campustools \
   -v `pwd`/data:/root/work/data -p 8080:8080 \
-  campustools node dist/getcourses.js [CAMPUS [YEAR]]
+  campustools node dist/getcourses.js [CAMPUS [YEAR [COOKIES]]]
 ```
 Outputs to data/:
 - CAMPUS-YEAR-OU.json - all courses (modules)
@@ -97,7 +105,9 @@ docker run -it --rm --name campustools \
   -v `pwd`/data:/root/work/data -p 8080:8080 \
   campustools
 ```
+
+See note earlier about copying cookies from an authenticated session!
 ```
 tsc
-node dist/getcourses.js [CAMPUS [YEAR]]
+node dist/getcourses.js [CAMPUS [YEAR [COOKIES]]]
 ```
